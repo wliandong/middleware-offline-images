@@ -1,0 +1,44 @@
+name: Export Offline Middleware Images
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - source: docker.io/library/mysql:8.4.10
+            archive: mysql-8.4.10-linux-amd64.tar.gz
+          - source: docker.io/library/redis:8.8
+            archive: redis-8.8-linux-amd64.tar.gz
+          - source: docker.io/library/mongo:8.0.26
+            archive: mongo-8.0.26-linux-amd64.tar.gz
+          - source: docker.io/apache/kafka:4.3.1
+            archive: kafka-4.3.1-linux-amd64.tar.gz
+    steps:
+      - name: Pull the linux amd64 image
+        env:
+          SOURCE: ${{ matrix.image.source }}
+        run: docker pull --platform linux/amd64 "$SOURCE"
+      - name: Create the Docker archive and checksum
+        env:
+          SOURCE: ${{ matrix.image.source }}
+          ARCHIVE: ${{ matrix.image.archive }}
+        run: |
+          docker save "$SOURCE" | gzip -1 > "$ARCHIVE"
+          sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
+      - name: Upload the offline archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.image.archive }}
+          path: |
+            ${{ matrix.image.archive }}
+            ${{ matrix.image.archive }}.sha256
+          if-no-files-found: error
+          retention-days: 1

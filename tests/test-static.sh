@@ -160,6 +160,18 @@ grep -F 'ghcr.io/wliandong/library/redis:8.8' "$WORKFLOW"
 grep -F 'ghcr.io/wliandong/library/mongo:8.0.26' "$WORKFLOW"
 grep -F 'ghcr.io/wliandong/apache/kafka:4.3.1' "$WORKFLOW"
 
+OFFLINE_EXPORT_WORKFLOW="$ROOT/.github/workflows/export-offline-images.yml"
+test -f "$OFFLINE_EXPORT_WORKFLOW"
+grep -F 'workflow_dispatch:' "$OFFLINE_EXPORT_WORKFLOW"
+grep -F 'docker.io/library/mysql:8.4.10' "$OFFLINE_EXPORT_WORKFLOW"
+grep -F 'docker.io/library/redis:8.8' "$OFFLINE_EXPORT_WORKFLOW"
+grep -F 'docker.io/library/mongo:8.0.26' "$OFFLINE_EXPORT_WORKFLOW"
+grep -F 'docker.io/apache/kafka:4.3.1' "$OFFLINE_EXPORT_WORKFLOW"
+grep -F 'docker save "$SOURCE" | gzip -1' "$OFFLINE_EXPORT_WORKFLOW"
+grep -F 'sha256sum "$ARCHIVE"' "$OFFLINE_EXPORT_WORKFLOW"
+grep -F 'actions/upload-artifact@v4' "$OFFLINE_EXPORT_WORKFLOW"
+grep -F 'retention-days: 1' "$OFFLINE_EXPORT_WORKFLOW"
+
 if rg -n 'latest' "$COMPOSE_FILE" "$PROBE_SCRIPT" "$RENDER_SCRIPT"; then
   printf 'Task 3 files must not use a latest tag.\n' >&2
   exit 1
