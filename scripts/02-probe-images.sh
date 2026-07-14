@@ -28,7 +28,10 @@ set -euo pipefail
 STACK_ROOT='__REMOTE_STACK_ROOT__'
 IMAGE_PLATFORM='linux/amd64'
 MANIFEST_PARSER='/tmp/middleware-select-manifest-digest.py'
-MIRROR_PREFIXES='__MIRROR_PREFIXES__'
+MYSQL_MIRROR_PREFIXES='__MYSQL_MIRROR_PREFIXES__'
+REDIS_MIRROR_PREFIXES='__REDIS_MIRROR_PREFIXES__'
+MONGODB_MIRROR_PREFIXES='__MONGODB_MIRROR_PREFIXES__'
+KAFKA_MIRROR_PREFIXES='__KAFKA_MIRROR_PREFIXES__'
 MANIFEST_TIMEOUT_SECONDS='__MANIFEST_TIMEOUT_SECONDS__'
 MYSQL_IMAGE='__MYSQL_IMAGE__'
 REDIS_IMAGE='__REDIS_IMAGE__'
@@ -62,15 +65,23 @@ publish_link() {
 
 install -d -m 0755 "$RESOLUTION_ROOT" "$STACK_ROOT/reports"
 trap cleanup EXIT
-for prefix in $MIRROR_PREFIXES; do
-  stage_dir="$(mktemp -d "$RESOLUTION_ROOT/.staging.XXXXXX")"
-  manifest_file="$stage_dir/image-manifests.txt"
-  env_file="$stage_dir/resolved-images.env"
-  accepted=1
+stage_dir="$(mktemp -d "$RESOLUTION_ROOT/.staging.XXXXXX")"
+manifest_file="$stage_dir/image-manifests.txt"
+env_file="$stage_dir/resolved-images.env"
 
-  for key in MYSQL REDIS MONGODB KAFKA; do
-    image_var="${key}_IMAGE"
-    image="${!image_var}"
+for key in MYSQL REDIS MONGODB KAFKA; do
+  image_var="${key}_IMAGE"
+  image="${!image_var}"
+  mirror_list_var="${key}_MIRROR_PREFIXES"
+  mirror_list="${!mirror_list_var:-}"
+  resolved=0
+
+  if [[ -z "$mirror_list" ]]; then
+    printf 'No configured mirror prefixes for %s.\n' "$key" >&2
+    exit 1
+  fi
+
+  for prefix in $mirror_list; do
     reference="${prefix}/${image}"
     manifest_status=0
     manifest="$(timeout --signal=TERM --kill-after=2s 20s docker manifest inspect --verbose "$reference" 2>&1)" || manifest_status=$?
@@ -80,51 +91,52 @@ for prefix in $MIRROR_PREFIXES; do
       else
         printf 'Mirror %s inspect failed for %s with exit status %s.\n' "$prefix" "$reference" "$manifest_status" >&2
       fi
-      accepted=0
-      break
+      continue
     fi
     if ! digest="$(python "$MANIFEST_PARSER" - "$IMAGE_PLATFORM" <<<"$manifest")"; then
       printf 'Mirror %s lacks a %s descriptor for %s.\n' "$prefix" "$IMAGE_PLATFORM" "$reference" >&2
-      accepted=0
-      break
+      continue
     fi
     if [[ ! "$digest" =~ ^sha256:[[:xdigit:]]{64}$ ]]; then
       printf 'Mirror %s returned no content digest for %s.\n' "$prefix" "$reference" >&2
-      accepted=0
-      break
+      continue
     fi
     printf '%s\t%s\t%s\n' "$key" "$reference" "$digest" >>"$manifest_file"
     printf '%s_IMAGE_REF=%s@%s\n' "$key" "$reference" "$digest" >>"$env_file"
+    printf 'Resolved %s image through mirror %s.\n' "$key" "$prefix"
+    resolved=1
+    break
   done
 
-  if (( accepted )); then
-    release_dir="$RESOLUTION_ROOT/release-$(date -u +%Y%m%dT%H%M%SZ)-$$"
-    mv "$stage_dir" "$release_dir"
-    stage_dir=
-    printf 'IMAGE_RESOLUTION_COMMITTED=1\n' >"$release_dir/commit"
-    printf 'IMAGE_RESOLUTION_READY=1\n' >"$release_dir/ready"
-    publish_link "image-resolution/current/resolved-images.env" "$STACK_ROOT/resolved-images.env"
-    publish_link "../image-resolution/current/image-manifests.txt" "$STACK_ROOT/reports/image-manifests.txt"
-    current_tmp="$RESOLUTION_ROOT/.current.$$"
-    rm -f "$current_tmp"
-    ln -s "$(basename "$release_dir")" "$current_tmp"
-    published=1
-    mv -f "$current_tmp" "$CURRENT_LINK"
-    trap - EXIT
-    printf 'Resolved all images through mirror %s.\n' "$prefix"
-    exit 0
+  if (( ! resolved )); then
+    printf 'No configured mirror provides a linux/amd64 image for %s.\n' "$key" >&2
+    exit 1
   fi
-
-  rm -rf "$stage_dir"
-  stage_dir=
 done
 
-printf 'No configured mirror provides all required linux/amd64 images.\n' >&2
-exit 1
+release_dir="$RESOLUTION_ROOT/release-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+mv "$stage_dir" "$release_dir"
+stage_dir=
+printf 'IMAGE_RESOLUTION_COMMITTED=1\n' >"$release_dir/commit"
+printf 'IMAGE_RESOLUTION_READY=1\n' >"$release_dir/ready"
+publish_link "image-resolution/current/resolved-images.env" "$STACK_ROOT/resolved-images.env"
+publish_link "../image-resolution/current/image-manifests.txt" "$STACK_ROOT/reports/image-manifests.txt"
+current_tmp="$RESOLUTION_ROOT/.current.$$"
+rm -f "$current_tmp"
+ln -s "$(basename "$release_dir")" "$current_tmp"
+published=1
+mv -f "$current_tmp" "$CURRENT_LINK"
+trap - EXIT
+printf 'Resolved all required image references.\n'
+exit 0
+
 REMOTE_SCRIPT
 )"
 REMOTE_SCRIPT="${REMOTE_SCRIPT//__REMOTE_STACK_ROOT__/$REMOTE_STACK_ROOT}"
-REMOTE_SCRIPT="${REMOTE_SCRIPT//__MIRROR_PREFIXES__/$MIRROR_PREFIXES}"
+REMOTE_SCRIPT="${REMOTE_SCRIPT//__MYSQL_MIRROR_PREFIXES__/$MYSQL_MIRROR_PREFIXES}"
+REMOTE_SCRIPT="${REMOTE_SCRIPT//__REDIS_MIRROR_PREFIXES__/$REDIS_MIRROR_PREFIXES}"
+REMOTE_SCRIPT="${REMOTE_SCRIPT//__MONGODB_MIRROR_PREFIXES__/$MONGODB_MIRROR_PREFIXES}"
+REMOTE_SCRIPT="${REMOTE_SCRIPT//__KAFKA_MIRROR_PREFIXES__/$KAFKA_MIRROR_PREFIXES}"
 REMOTE_SCRIPT="${REMOTE_SCRIPT//__MANIFEST_TIMEOUT_SECONDS__/$MANIFEST_TIMEOUT_SECONDS}"
 REMOTE_SCRIPT="${REMOTE_SCRIPT//__MYSQL_IMAGE__/$MYSQL_IMAGE}"
 REMOTE_SCRIPT="${REMOTE_SCRIPT//__REDIS_IMAGE__/$REDIS_IMAGE}"

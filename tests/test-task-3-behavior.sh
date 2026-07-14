@@ -49,7 +49,10 @@ SCRIPT
   payload="$(PRINT_REMOTE_SCRIPT=1 bash "$ROOT/scripts/02-probe-images.sh" | sed \
     -e "s|^STACK_ROOT=.*|STACK_ROOT='$temp_dir/stack'|" \
     -e "s|^MANIFEST_PARSER=.*|MANIFEST_PARSER='$ROOT/scripts/lib/manifest-select.py'|" \
-    -e "s|^MIRROR_PREFIXES=.*|MIRROR_PREFIXES='first.invalid second.invalid'|")"
+    -e "s|^MYSQL_MIRROR_PREFIXES=.*|MYSQL_MIRROR_PREFIXES='first.invalid second.invalid'|" \
+    -e "s|^REDIS_MIRROR_PREFIXES=.*|REDIS_MIRROR_PREFIXES='second.invalid'|" \
+    -e "s|^MONGODB_MIRROR_PREFIXES=.*|MONGODB_MIRROR_PREFIXES='second.invalid'|" \
+    -e "s|^KAFKA_MIRROR_PREFIXES=.*|KAFKA_MIRROR_PREFIXES='second.invalid'|")"
 
   if ! output="$(PATH="$fake_bin:$PATH" TIMEOUT_CAPTURE="$temp_dir/timeout.log" DOCKER_CAPTURE="$temp_dir/docker.log" \
     MANIFEST_FIXTURE="$ROOT/tests/fixtures/manifest-multiarch.json" bash -c "$payload" 2>"$temp_dir/stderr.log")"; then
@@ -57,8 +60,11 @@ SCRIPT
     fail 'Generated probe payload failed before timeout failover assertions.'
   fi
 
-  grep -F 'Resolved all images through mirror second.invalid.' <<<"$output" || \
-    fail 'Probe payload did not move to the second prefix after the first timeout.'
+  grep -F 'Resolved MYSQL image through mirror second.invalid.' <<<"$output" || \
+    fail 'Probe payload did not move MySQL to the second prefix after the first timeout.'
+  grep -F 'Resolved REDIS image through mirror second.invalid.' <<<"$output"
+  grep -F 'Resolved MONGODB image through mirror second.invalid.' <<<"$output"
+  grep -F 'Resolved KAFKA image through mirror second.invalid.' <<<"$output"
   grep -F -- '--signal=TERM --kill-after=2s 20s docker manifest inspect --verbose first.invalid/library/mysql:8.4.10' "$temp_dir/timeout.log"
   grep -F -- '--signal=TERM --kill-after=2s 20s docker manifest inspect --verbose second.invalid/library/mysql:8.4.10' "$temp_dir/timeout.log"
   test "$(grep -Fc 'first.invalid/library/mysql:8.4.10' "$temp_dir/timeout.log")" = "1"
