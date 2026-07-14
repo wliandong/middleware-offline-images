@@ -68,3 +68,33 @@ git diff --check
 ```
 
 The local suites cover multi-architecture digest selection, generated MySQL SQL through a stub `mysql`, invalid public-port rejection, incomplete image-resolution rejection, ready-marker ordering, Redis mode `0600` plus UID/GID ownership, Kafka non-root UID/GID configuration, cleanup-trap isolation, and checkpoint boundaries. Test values are explicit fixtures only; no real password was added. No Docker engine command, network request, SSH/SCP operation, image pull, or virtual-machine action was performed.
+
+## Manifest Timeout Increment
+
+### RED
+
+- Added a local-only behavior scenario that executes the generated remote payload with stub `timeout`, stub `docker`, a temporary stack root, and the existing multi-architecture manifest fixture.
+- Before implementation, `TEST_CASE=timeout bash tests/test-task-3-behavior.sh` exited 1 with `Probe payload did not move to the second prefix after the first timeout.` The payload called `docker manifest inspect` directly, so the timeout stub was never used and the first prefix was accepted instead of failing over.
+
+### GREEN
+
+- Added `MANIFEST_TIMEOUT_SECONDS="${MANIFEST_TIMEOUT_SECONDS:-20}"` and injected the resolved value into the remote payload. An override test confirms `MANIFEST_TIMEOUT_SECONDS=7` is preserved in generated payload output.
+- Every manifest inspection now runs once through GNU `timeout "${MANIFEST_TIMEOUT_SECONDS}s"`. Exit 124 reports the timed-out prefix, reference, and duration; every other non-zero status reports a distinct inspect-failure diagnostic with prefix, reference, and status. Both cases reject the current prefix immediately without retrying it.
+- The timeout behavior test passed with only one first-prefix attempt, then recorded second-prefix MySQL through Kafka inspection and `Resolved all images through mirror second.invalid.` Structured digest selection and ready/commit publication assertions remained green.
+
+### Verification
+
+The following local-only commands completed with exit code 0:
+
+```bash
+find scripts init tests -type f -name '*.sh' -print0 | sort -z | xargs -0 bash -n
+bash tests/test-static.sh
+bash tests/test-dry-run.sh
+bash tests/test-task-3-behavior.sh
+shasum -a 256 -c checkpoints/task-01.sha256
+shasum -a 256 -c checkpoints/task-02.sha256
+shasum -a 256 -c checkpoints/task-03.sha256
+git diff --check
+```
+
+No real Docker command, network request, SSH/SCP operation, image pull, or virtual-machine action was performed.

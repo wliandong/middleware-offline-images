@@ -85,10 +85,16 @@ fi
 
 probe_output="$(DRY_RUN=1 bash "$ROOT/scripts/02-probe-images.sh")"
 probe_payload="$(PRINT_REMOTE_SCRIPT=1 bash "$ROOT/scripts/02-probe-images.sh")"
+overridden_probe_payload="$(MANIFEST_TIMEOUT_SECONDS=7 PRINT_REMOTE_SCRIPT=1 bash "$ROOT/scripts/02-probe-images.sh")"
 grep -F 'docker manifest inspect --verbose' <<<"$probe_payload"
 grep -F "MIRROR_PREFIXES='docker.1ms.run docker.m.daocloud.io dockerproxy.net'" <<<"$probe_payload"
 grep -F "MYSQL_IMAGE='library/mysql:8.4.10'" <<<"$probe_payload"
 grep -F 'reference="${prefix}/${image}"' <<<"$probe_payload"
+grep -F "MANIFEST_TIMEOUT_SECONDS='20'" <<<"$probe_payload"
+grep -F "MANIFEST_TIMEOUT_SECONDS='7'" <<<"$overridden_probe_payload"
+grep -F 'timeout "${MANIFEST_TIMEOUT_SECONDS}s" docker manifest inspect --verbose "$reference"' <<<"$probe_payload"
+grep -F "printf 'Mirror %s timed out after %s seconds inspecting %s." <<<"$probe_payload"
+grep -F "printf 'Mirror %s inspect failed for %s with exit status %s." <<<"$probe_payload"
 grep -F 'linux/amd64' <<<"$probe_payload"
 grep -F 'resolved-images.env' <<<"$probe_output"
 if grep -E '(^|[[:space:]])(ssh|scp)[[:space:]]' <<<"$probe_payload"; then

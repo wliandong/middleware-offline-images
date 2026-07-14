@@ -14,6 +14,58 @@ test_manifest_digest() {
   test "$digest" = "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 }
 
+test_manifest_timeout_failover() (
+  local temp_dir fake_bin payload output
+  temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/middleware-manifest-timeout.XXXXXX")"
+  trap 'rm -rf "$temp_dir"' EXIT
+  fake_bin="$temp_dir/bin"
+  mkdir -p "$fake_bin" "$temp_dir/stack"
+
+  cat >"$fake_bin/timeout" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+duration="$1"
+shift
+printf '%s\t%s\n' "$duration" "$*" >>"$TIMEOUT_CAPTURE"
+case "$*" in
+  *first.invalid*) exit 124 ;;
+esac
+"$@"
+SCRIPT
+  cat >"$fake_bin/docker" <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"$DOCKER_CAPTURE"
+cat "$MANIFEST_FIXTURE"
+SCRIPT
+  cat >"$fake_bin/python" <<'SCRIPT'
+#!/usr/bin/env bash
+exec python3 "$@"
+SCRIPT
+  chmod 0755 "$fake_bin/timeout" "$fake_bin/docker" "$fake_bin/python"
+
+  payload="$(PRINT_REMOTE_SCRIPT=1 bash "$ROOT/scripts/02-probe-images.sh" | sed \
+    -e "s|^STACK_ROOT=.*|STACK_ROOT='$temp_dir/stack'|" \
+    -e "s|^MANIFEST_PARSER=.*|MANIFEST_PARSER='$ROOT/scripts/lib/manifest-select.py'|" \
+    -e "s|^MIRROR_PREFIXES=.*|MIRROR_PREFIXES='first.invalid second.invalid'|")"
+
+  if ! output="$(PATH="$fake_bin:$PATH" TIMEOUT_CAPTURE="$temp_dir/timeout.log" DOCKER_CAPTURE="$temp_dir/docker.log" \
+    MANIFEST_FIXTURE="$ROOT/tests/fixtures/manifest-multiarch.json" bash -c "$payload" 2>"$temp_dir/stderr.log")"; then
+    cat "$temp_dir/stderr.log" >&2
+    fail 'Generated probe payload failed before timeout failover assertions.'
+  fi
+
+  grep -F 'Resolved all images through mirror second.invalid.' <<<"$output" || \
+    fail 'Probe payload did not move to the second prefix after the first timeout.'
+  grep -F $'20s\tdocker manifest inspect --verbose first.invalid/library/mysql:8.4.10' "$temp_dir/timeout.log"
+  grep -F $'20s\tdocker manifest inspect --verbose second.invalid/library/mysql:8.4.10' "$temp_dir/timeout.log"
+  grep -F 'manifest inspect --verbose second.invalid/apache/kafka:4.3.1' "$temp_dir/docker.log"
+  if grep -F 'first.invalid/library/redis:8.8' "$temp_dir/timeout.log"; then
+    fail 'Timed out prefix was retried instead of moving to the next prefix.'
+  fi
+  grep -F 'Mirror first.invalid timed out after 20 seconds inspecting first.invalid/library/mysql:8.4.10.' "$temp_dir/stderr.log"
+)
+
 test_cleanup_traps_are_process_scoped() {
   local cleanup_signal="RET""URN"
   if grep -En "trap .*${cleanup_signal}" "$ROOT/tests/test-task-3-behavior.sh"; then
@@ -146,6 +198,7 @@ test_checkpoint_boundaries() {
 
 case "$CASE" in
   manifest) test_manifest_digest ;;
+  timeout) test_manifest_timeout_failover ;;
   cleanup) test_cleanup_traps_are_process_scoped ;;
   mysql) test_mysql_init_sql ;;
   ports) test_public_port_rejected ;;
@@ -153,7 +206,7 @@ case "$CASE" in
   redis) test_redis_owner_contract ;;
   checkpoints) test_checkpoint_boundaries ;;
   all)
-    for test_case in manifest cleanup mysql ports ready redis checkpoints; do
+    for test_case in manifest timeout cleanup mysql ports ready redis checkpoints; do
       TEST_CASE="$test_case" bash "$0"
     done
     ;;

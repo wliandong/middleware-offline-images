@@ -29,6 +29,7 @@ STACK_ROOT='__REMOTE_STACK_ROOT__'
 IMAGE_PLATFORM='linux/amd64'
 MANIFEST_PARSER='/tmp/middleware-select-manifest-digest.py'
 MIRROR_PREFIXES='__MIRROR_PREFIXES__'
+MANIFEST_TIMEOUT_SECONDS='__MANIFEST_TIMEOUT_SECONDS__'
 MYSQL_IMAGE='__MYSQL_IMAGE__'
 REDIS_IMAGE='__REDIS_IMAGE__'
 MONGODB_IMAGE='__MONGODB_IMAGE__'
@@ -71,8 +72,14 @@ for prefix in $MIRROR_PREFIXES; do
     image_var="${key}_IMAGE"
     image="${!image_var}"
     reference="${prefix}/${image}"
-    if ! manifest="$(docker manifest inspect --verbose "$reference" 2>&1)"; then
-      printf 'Mirror %s cannot inspect %s.\n' "$prefix" "$reference" >&2
+    manifest_status=0
+    manifest="$(timeout "${MANIFEST_TIMEOUT_SECONDS}s" docker manifest inspect --verbose "$reference" 2>&1)" || manifest_status=$?
+    if (( manifest_status != 0 )); then
+      if (( manifest_status == 124 )); then
+        printf 'Mirror %s timed out after %s seconds inspecting %s.\n' "$prefix" "$MANIFEST_TIMEOUT_SECONDS" "$reference" >&2
+      else
+        printf 'Mirror %s inspect failed for %s with exit status %s.\n' "$prefix" "$reference" "$manifest_status" >&2
+      fi
       accepted=0
       break
     fi
@@ -118,6 +125,7 @@ REMOTE_SCRIPT
 )"
 REMOTE_SCRIPT="${REMOTE_SCRIPT//__REMOTE_STACK_ROOT__/$REMOTE_STACK_ROOT}"
 REMOTE_SCRIPT="${REMOTE_SCRIPT//__MIRROR_PREFIXES__/$MIRROR_PREFIXES}"
+REMOTE_SCRIPT="${REMOTE_SCRIPT//__MANIFEST_TIMEOUT_SECONDS__/$MANIFEST_TIMEOUT_SECONDS}"
 REMOTE_SCRIPT="${REMOTE_SCRIPT//__MYSQL_IMAGE__/$MYSQL_IMAGE}"
 REMOTE_SCRIPT="${REMOTE_SCRIPT//__REDIS_IMAGE__/$REDIS_IMAGE}"
 REMOTE_SCRIPT="${REMOTE_SCRIPT//__MONGODB_IMAGE__/$MONGODB_IMAGE}"
@@ -130,7 +138,7 @@ fi
 
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
   printf 'DRY RUN: upload manifest probe payload and structured JSON parser to %s:%s.\n' "$REMOTE_HOST" "$REMOTE_PATH"
-  printf 'DRY RUN: inspect all exact image tags with docker manifest inspect --verbose for linux/amd64.\n'
+  printf 'DRY RUN: inspect all exact image tags with a %s second GNU timeout for linux/amd64.\n' "$MANIFEST_TIMEOUT_SECONDS"
   printf 'DRY RUN: publish ready and commit marked image resolution under %s/image-resolution/current.\n' "$REMOTE_STACK_ROOT"
   printf '%s\n' "$REMOTE_SCRIPT"
   exit 0
