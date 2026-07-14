@@ -1,0 +1,5 @@
+.superpowers/
+.env
+resolved-images.env
+reports/*.log
+reports/*.txt
