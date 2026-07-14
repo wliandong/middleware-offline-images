@@ -50,6 +50,11 @@ fi
 REMOTE_SCRIPT
 )"
 
+if [[ "${PRINT_REMOTE_SCRIPT:-0}" == "1" ]]; then
+  printf '%s\n' "$REMOTE_SCRIPT"
+  exit 0
+fi
+
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
   printf 'DRY RUN: remote preflight checks /etc/redhat-release, uname -m, lscpu, xfs_info /home, df -Pk /home, timedatectl, getenforce, ss, and systemctl list-unit-files.\n'
   printf 'DRY RUN: report would be written to %s\n' "$REPORT"

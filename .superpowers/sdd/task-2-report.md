@@ -43,3 +43,33 @@ Results: all commands exited 0. The dry-run output included `26.1.4`, `/home/doc
 - No real SSH, Docker installation, or legacy-service action was performed.
 - The exact package availability guard depends on the remote Aliyun repository exposing `docker-ce-26.1.4`; an unavailable RPM fails safely without selecting another version.
 - Preflight is intentionally read-only and must be run against the target host before installation.
+
+## Review Fixes
+
+### Cause and Changes
+
+- The initial installer overwrote `/etc/docker/daemon.json` directly. The remote payload now exits with `Refusing to overwrite non-empty /etc/docker/daemon.json.` when that file exists and is non-empty, before any YUM, directory, or Docker operation. When the destination is absent or empty, the JSON is written to an `/etc/docker/daemon.json.XXXXXX` temporary file and published with `install -m 0644`.
+- The initial dry-run test asserted only launcher summaries. Both Task 2 scripts now support `PRINT_REMOTE_SCRIPT=1`, which prints the generated remote payload and exits before SSH/SCP. The test inspects those payloads directly.
+- The test rejects `systemctl stop` for any unit containing `mysql`, `redis`, or `mongo`, and `service <mysql|redis|mongo...> stop`, across both payloads.
+- Payload order is asserted from the daemon safety guard through dependency install, mirror add, exact-version check, Docker install, directory creation, temporary daemon config write, Docker enable/start, and version/storage/root/Compose verification.
+
+### RED
+
+Command: `bash -n tests/test-dry-run.sh && bash tests/test-dry-run.sh`
+
+Key output before implementation: the test exited 1 at its first payload assertion because `PRINT_REMOTE_SCRIPT=1` still returned only the old dry-run summary rather than `lscpu` and `xfs_info /home` payload content.
+
+### GREEN and Coverage
+
+Commands:
+
+```bash
+bash -n scripts/00-preflight.sh scripts/01-install-docker.sh tests/test-dry-run.sh
+bash tests/test-static.sh
+bash tests/test-dry-run.sh
+find scripts tests -type f -print0 | sort -z | xargs -0 shasum -a 256 > checkpoints/task-02.sha256
+shasum -a 256 -c checkpoints/task-02.sha256
+git diff --check
+```
+
+Key output: `Dry-run tests passed.` and all five files in `checkpoints/task-02.sha256` returned `OK`. The payload checks exercised both scripts without SSH/SCP; no target-host connection, Docker installation, or legacy service action occurred.
