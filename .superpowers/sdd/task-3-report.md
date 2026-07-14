@@ -35,3 +35,36 @@ The dry-run test inspected the remote manifest payload locally, confirmed it con
 ## Follow-up
 
 - The actual `docker manifest inspect` operations and `docker compose config --quiet` command intentionally remain unexecuted locally. They run only when the deployment workflow is executed against the target environment.
+
+## Review Finding Closure
+
+### RED and Root Cause Evidence
+
+- The first rerun of `bash tests/test-task-3-behavior.sh` exited 1 after the manifest and MySQL scenarios. Running scenarios separately showed `manifest`, `mysql`, `ready`, `redis`, and `checkpoints` passed while `ports` failed.
+- The previous same-process cleanup failure had already been mitigated by dispatching each scenario through `TEST_CASE=<name> bash tests/test-task-3-behavior.sh`, so the rerun did not reproduce an unbound local variable across scenarios. A focused regression check then failed with exit 1 and listed four remaining `trap ... RETURN` cleanup sites. This confirmed the underlying cleanup mechanism was still unsafe even though subprocess dispatch isolated its effects.
+- `TEST_CASE=ready bash tests/test-task-3-behavior.sh` failed after adding an ordering assertion because the generated probe payload wrote `IMAGE_RESOLUTION_READY=1` before `IMAGE_RESOLUTION_COMMITTED=1`.
+- The public-port fixture initially failed before its expected diagnostic because the static validator checked the mapping count before examining the injected `0.0.0.0:3307:3306` entry. During this cycle, Task 1 checkpoint validation also correctly rejected the modified `tests/test-static.sh` until its task-scoped checksum was regenerated.
+
+### GREEN
+
+- Cleanup functions now run in function subshells with `EXIT` traps. The aggregate test still launches each scenario in a separate Bash process, and a regression assertion rejects future `RETURN` cleanup traps.
+- The image-resolution release writes its commit marker first and its ready marker last, before atomically switching the `current` symlink. The renderer requires the resolved file plus exact ready and commit marker contents.
+- Static port validation now checks every discovered mapping against the four loopback-only mappings before checking the exact count, so an extra public mapping is rejected with a specific diagnostic.
+- Task 1, Task 2, and Task 3 checkpoints were regenerated from their explicit task boundaries. Task 2 excludes Task 3 files; Task 3 excludes Task 1 and Task 2 implementation files.
+
+### Final Local Test Evidence
+
+All of the following completed with exit code 0:
+
+```bash
+find scripts init tests -type f -name '*.sh' -print0 | sort -z | xargs -0 bash -n
+bash tests/test-static.sh
+bash tests/test-dry-run.sh
+bash tests/test-task-3-behavior.sh
+shasum -a 256 -c checkpoints/task-01.sha256
+shasum -a 256 -c checkpoints/task-02.sha256
+shasum -a 256 -c checkpoints/task-03.sha256
+git diff --check
+```
+
+The local suites cover multi-architecture digest selection, generated MySQL SQL through a stub `mysql`, invalid public-port rejection, incomplete image-resolution rejection, ready-marker ordering, Redis mode `0600` plus UID/GID ownership, Kafka non-root UID/GID configuration, cleanup-trap isolation, and checkpoint boundaries. Test values are explicit fixtures only; no real password was added. No Docker engine command, network request, SSH/SCP operation, image pull, or virtual-machine action was performed.

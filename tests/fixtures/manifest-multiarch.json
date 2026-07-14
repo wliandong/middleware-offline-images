@@ -1,0 +1,17 @@
+{
+  "manifests": [
+    {
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "platform": { "os": "linux", "architecture": "arm64" }
+    },
+    {
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "platform": { "os": "unknown", "architecture": "unknown" },
+      "annotations": { "vnd.docker.reference.type": "attestation-manifest" }
+    },
+    {
+      "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "platform": { "os": "linux", "architecture": "amd64" }
+    }
+  ]
+}

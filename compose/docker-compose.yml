@@ -89,6 +89,7 @@ services:
   kafka:
     image: ${KAFKA_IMAGE_REF:?Run scripts/02-probe-images.sh first}
     platform: linux/amd64
+    user: "${KAFKA_UID:-1000}:${KAFKA_GID:-1000}"
     restart: unless-stopped
     mem_limit: 3g
     ports:
@@ -108,7 +109,7 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
     volumes:
-      - /home/middleware-test/data/kafka:/tmp/kraft-combined-logs:Z
+      - ${KAFKA_DATA_DIR:-/home/middleware-test/data/kafka}:/tmp/kraft-combined-logs:Z
     networks:
       - middleware-internal
     ulimits:

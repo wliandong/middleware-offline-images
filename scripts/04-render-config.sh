@@ -2,10 +2,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT/versions.env"
 ENV_FILE="${ENV_FILE:-$ROOT/.env}"
-RESOLVED_IMAGES_FILE="${RESOLVED_IMAGES_FILE:-$ROOT/resolved-images.env}"
+RESOLUTION_DIR="${RESOLUTION_DIR:-$ROOT/image-resolution/current}"
+RESOLVED_IMAGES_FILE="${RESOLVED_IMAGES_FILE:-$RESOLUTION_DIR/resolved-images.env}"
+READY_FILE="${READY_FILE:-$RESOLUTION_DIR/ready}"
+COMMIT_FILE="${COMMIT_FILE:-$RESOLUTION_DIR/commit}"
 TEMPLATE="$ROOT/config/redis/redis.conf.template"
-RENDERED_CONFIG="$ROOT/runtime/redis/redis.conf"
+RENDERED_CONFIG="${RENDERED_CONFIG:-$ROOT/runtime/redis/redis.conf}"
 COMPOSE_FILE="$ROOT/compose/docker-compose.yml"
 
 require_file() {
@@ -30,8 +34,12 @@ require_secret() {
 
 require_file "$ENV_FILE"
 require_file "$RESOLVED_IMAGES_FILE"
+require_file "$READY_FILE"
+require_file "$COMMIT_FILE"
 require_file "$TEMPLATE"
 require_file "$COMPOSE_FILE"
+grep -Fxq 'IMAGE_RESOLUTION_READY=1' "$READY_FILE"
+grep -Fxq 'IMAGE_RESOLUTION_COMMITTED=1' "$COMMIT_FILE"
 
 set -a
 source "$ENV_FILE"
@@ -40,7 +48,7 @@ set +a
 require_secret REDIS_PASSWORD
 
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
-  printf 'DRY RUN: render Redis configuration at %s with mode 0600.\n' "$RENDERED_CONFIG"
+  printf 'DRY RUN: render Redis configuration at %s with mode 0600 and owner %s:%s.\n' "$RENDERED_CONFIG" "$REDIS_UID" "$REDIS_GID"
   printf 'DRY RUN: validate Compose with docker compose --env-file %s --env-file %s -f %s config --quiet.\n' "$RESOLVED_IMAGES_FILE" "$ENV_FILE" "$COMPOSE_FILE"
   exit 0
 fi
@@ -56,6 +64,7 @@ escaped_password="${escaped_password//&/\\&}"
 escaped_password="${escaped_password//|/\\|}"
 sed "s|__REDIS_PASSWORD__|${escaped_password}|g" "$TEMPLATE" >"$temporary_config"
 install -m 0600 "$temporary_config" "$RENDERED_CONFIG"
+chown "$REDIS_UID:$REDIS_GID" "$RENDERED_CONFIG"
 rm -f "$temporary_config"
 trap - EXIT
 

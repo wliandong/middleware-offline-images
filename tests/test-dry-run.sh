@@ -98,9 +98,12 @@ fi
 
 render_fixture="$(mktemp -d "${TMPDIR:-/tmp}/middleware-render-test.XXXXXX")"
 trap 'rm -rf "$render_fixture"' EXIT
+mkdir -p "$render_fixture/resolution"
 printf '%s\n' 'REDIS_PASSWORD=dry-run-secret' >"$render_fixture/.env"
 printf '%s\n' 'MYSQL_IMAGE_REF=docker.1ms.run/library/mysql:8.4.10@sha256:example' >"$render_fixture/resolved-images.env"
-render_output="$(DRY_RUN=1 ENV_FILE="$render_fixture/.env" RESOLVED_IMAGES_FILE="$render_fixture/resolved-images.env" bash "$ROOT/scripts/04-render-config.sh")"
+printf '%s\n' 'IMAGE_RESOLUTION_READY=1' >"$render_fixture/resolution/ready"
+printf '%s\n' 'IMAGE_RESOLUTION_COMMITTED=1' >"$render_fixture/resolution/commit"
+render_output="$(DRY_RUN=1 ENV_FILE="$render_fixture/.env" RESOLVED_IMAGES_FILE="$render_fixture/resolved-images.env" RESOLUTION_DIR="$render_fixture/resolution" bash "$ROOT/scripts/04-render-config.sh")"
 grep -F 'mode 0600' <<<"$render_output"
 grep -F 'docker compose' <<<"$render_output"
 grep -F 'config --quiet' <<<"$render_output"

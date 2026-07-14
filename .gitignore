@@ -4,3 +4,4 @@ resolved-images.env
 reports/*.log
 reports/*.txt
 runtime/
+image-resolution/
