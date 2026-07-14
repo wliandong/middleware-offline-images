@@ -52,6 +52,12 @@ grep -F 'if [[ -s /etc/docker/daemon.json ]]; then' <<<"$install_payload"
 grep -F 'Refusing to overwrite non-empty /etc/docker/daemon.json.' <<<"$install_payload"
 grep -F 'mktemp /etc/docker/daemon.json.XXXXXX' <<<"$install_payload"
 grep -F 'install -m 0644 "${daemon_tmp}" /etc/docker/daemon.json' <<<"$install_payload"
+grep -F 'yum --enablerepo=rhel-7-server-extras-rpms install -y container-selinux fuse-overlayfs slirp4netns' <<<"$install_payload"
+
+if grep -E 'yum-config-manager[[:space:]].*--enable[[:space:]]+rhel-7-server-extras-rpms|subscription-manager[[:space:]]+repos[[:space:]].*--enable.*rhel-7-server-extras-rpms' <<<"$install_payload"; then
+  printf 'Installer must not permanently enable the RHEL extras repository.\n' >&2
+  exit 1
+fi
 
 if grep -E '(^|[[:space:]])(ssh|scp)[[:space:]]' <<<"$preflight_payload$install_payload"; then
   printf 'Payload-print mode must not run SSH or SCP.\n' >&2
@@ -60,7 +66,8 @@ fi
 
 assert_before 'if [[ -s /etc/docker/daemon.json ]]; then' 'yum install -y yum-utils device-mapper-persistent-data lvm2'
 assert_before 'yum install -y yum-utils device-mapper-persistent-data lvm2' 'yum-config-manager --add-repo'
-assert_before 'yum-config-manager --add-repo' 'if ! yum list available "docker-ce-${DOCKER_CE_VERSION}"'
+assert_before 'yum-config-manager --add-repo' 'yum --enablerepo=rhel-7-server-extras-rpms install -y container-selinux fuse-overlayfs slirp4netns'
+assert_before 'yum --enablerepo=rhel-7-server-extras-rpms install -y container-selinux fuse-overlayfs slirp4netns' 'if ! yum list available "docker-ce-${DOCKER_CE_VERSION}"'
 assert_before 'if ! yum list available "docker-ce-${DOCKER_CE_VERSION}"' 'yum install -y "docker-ce-${DOCKER_CE_VERSION}"'
 assert_before 'yum install -y "docker-ce-${DOCKER_CE_VERSION}"' 'install -d -m 0755'
 assert_before 'install -d -m 0755' 'mktemp /etc/docker/daemon.json.XXXXXX'

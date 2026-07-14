@@ -20,6 +20,7 @@ fi
 
 yum install -y yum-utils device-mapper-persistent-data lvm2
 yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+yum --enablerepo=rhel-7-server-extras-rpms install -y container-selinux fuse-overlayfs slirp4netns
 if ! yum list available "docker-ce-${DOCKER_CE_VERSION}" >/dev/null 2>&1; then
   printf 'Docker CE %s is unavailable; no alternate version will be installed.\n' "${DOCKER_CE_VERSION}" >&2
   exit 1

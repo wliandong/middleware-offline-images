@@ -97,3 +97,19 @@ Key output: `Dry-run tests passed.` and all five files in `checkpoints/task-02.s
 - Fix: the read-only payload now accepts `chronyc tracking` only when `Leap status.*Normal` matches, then falls back to `timedatectl status` matching `NTP synchronized: yes`; only both failures mark NTP as failed.
 - GREEN commands: `bash -n scripts/00-preflight.sh scripts/01-install-docker.sh tests/test-dry-run.sh`, `bash tests/test-static.sh`, `bash tests/test-dry-run.sh`, and `shasum -a 256 -c checkpoints/task-02.sha256`.
 - GREEN result: all commands exited 0; `Dry-run tests passed.` and all five checkpoint entries returned `OK`. The tests used only local payload-print and dry-run paths, without Docker, SSH, or service actions.
+
+## RHEL 7 Extras Docker Dependency Fix
+
+### Real Failure Evidence and Root Cause
+
+- Docker CE 26.1.4 dependency resolution on the target failed because it requires `container-selinux >= 2:2.74`, `fuse-overlayfs >= 0.7`, and `slirp4netns >= 0.4`.
+- The target's subscribed `rhel-7-server-extras-rpms` repository was disabled, but read-only queries confirmed it provides `container-selinux 2:2.119.2-1.911c772.el7_8`, `fuse-overlayfs 0.7.2-6.el7_8`, and `slirp4netns 0.4.3-4.el7_8`.
+- Root cause: the payload added the Docker repository but did not make these extras-only dependencies available to the Docker CE transaction.
+
+### RED and GREEN
+
+- RED command: `bash -n tests/test-dry-run.sh && bash tests/test-dry-run.sh`.
+- RED result: exit 1 because the payload lacked `yum --enablerepo=rhel-7-server-extras-rpms install -y container-selinux fuse-overlayfs slirp4netns`.
+- Fix: after the daemon guard, base tool install, and Docker repository addition, the payload temporarily enables only that one YUM transaction to install the three dependencies before exact Docker CE availability and installation. It does not run `yum-config-manager --enable` or `subscription-manager repos --enable`.
+- GREEN commands: `bash -n scripts/00-preflight.sh scripts/01-install-docker.sh tests/test-dry-run.sh`, `bash tests/test-static.sh`, `bash tests/test-dry-run.sh`, and `shasum -a 256 -c checkpoints/task-02.sha256`.
+- GREEN result: all commands exited 0; `Dry-run tests passed.` and all five checkpoint entries returned `OK`. No SSH connection, local Docker installation, or Docker startup occurred.
