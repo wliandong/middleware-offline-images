@@ -24,3 +24,14 @@ test "$REDIS_PORT" = "127.0.0.1:6379"
 test "$MONGODB_PORT" = "127.0.0.1:27017"
 test "$KAFKA_PORT" = "127.0.0.1:9092"
 declare -F run require_command sha256_file remote >/dev/null
+
+CHECKPOINT="$ROOT/checkpoints/task-01.sha256"
+if grep -Fq 'checkpoints/task-01.sha256' "$CHECKPOINT"; then
+  printf 'checkpoint must not include itself\n' >&2
+  exit 1
+fi
+test "$(wc -l < "$CHECKPOINT" | tr -d '[:space:]')" = "4"
+for file in .env.example versions.env scripts/lib/common.sh tests/test-static.sh; do
+  grep -Fq "./$file" "$CHECKPOINT"
+done
+shasum -a 256 -c "$CHECKPOINT" >/dev/null

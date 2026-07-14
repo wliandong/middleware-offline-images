@@ -1,12 +1,4 @@
 4735349192d61ffddb63340326eec79c2fc14771af3e1c4422eadf3b7f970b2b  ./.env.example
-1e3020ea19353a1cdad1db494eea80c025a6a24a4f12d58a688260889335c9ce  ./.git
-959e20df32aa09c1b966bf4f51e91d02f7bbbfe6a8a93828c2b38ee2e73a50b8  ./.gitignore
-cdbcae15105d6b781e620813c79c7e868740d4e9cc53ce6f5fcbbc12387adf4b  ./.superpowers/sdd/.gitignore
-71f57123a8074127e73be5e7d6ff43a326d8ea48e3c0438417e0e7e1ef015ab8  ./.superpowers/sdd/global-constraints.md
-5735bc45756a74f36787105b2fd8758469245fabefaa6f670009d2b73313d7de  ./.superpowers/sdd/progress.md
-79c60c3c8dff444ce39b6b73bbc05e36243a447f5484d3cd76f6dba09521a054  ./.superpowers/sdd/task-1-brief.md
-17ddedf2ad4467eea3f3651c25a433c8beceaa505ff3028c0f9b8d04ecdb2525  ./README.md
-e9521246bec62d162d062baef1d2e961bf3b50260bb37a5093c5d1206df3ce76  ./checkpoints/task-01.sha256
-cc045f6aea4b62b1ed41bc329c751167ee47f2574d2b35de76460cd6a89fbcc5  ./scripts/lib/common.sh
-d8c884399c4c3d996f46cb1dbdb1e3eac68de81c9f05c8b98e4c8831e5408648  ./tests/test-static.sh
 4cd43c48c4145135eebbab6a3a592a2cfb34f5437b8f072b0ba7705de07bffbd  ./versions.env
+cc045f6aea4b62b1ed41bc329c751167ee47f2574d2b35de76460cd6a89fbcc5  ./scripts/lib/common.sh
+23c39f800005ca2cd3c9c21714cbf0a6a0003d8f7e7ffb534db19a1cb06026a2  ./tests/test-static.sh
