@@ -1,0 +1,45 @@
+name: Sync Official Middleware Images
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/sync-images.yml
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - source: docker.io/library/mysql:8.4.10
+            destination: ghcr.io/wliandong/library/mysql:8.4.10
+          - source: docker.io/library/redis:8.8
+            destination: ghcr.io/wliandong/library/redis:8.8
+          - source: docker.io/library/mongo:8.0.26
+            destination: ghcr.io/wliandong/library/mongo:8.0.26
+          - source: docker.io/apache/kafka:4.3.1
+            destination: ghcr.io/wliandong/apache/kafka:4.3.1
+    steps:
+      - name: Install skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes skopeo
+      - name: Copy all image manifests and layers
+        env:
+          SOURCE: ${{ matrix.image.source }}
+          DESTINATION: ${{ matrix.image.destination }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          skopeo copy --all \
+            --dest-creds "${GHCR_USERNAME}:${GHCR_TOKEN}" \
+            "docker://${SOURCE}" \
+            "docker://${DESTINATION}"
