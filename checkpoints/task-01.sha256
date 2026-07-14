@@ -1,4 +1,4 @@
 54f8228599004a6b77a65a0e5516acbf9ab52e898ea3fdb501c51f9242960f30  ./.env.example
 6d634d080610c8c87eb2ceb0d9d40894120d6487cb40a11dd723da8b6d56b6ca  ./versions.env
 cc045f6aea4b62b1ed41bc329c751167ee47f2574d2b35de76460cd6a89fbcc5  ./scripts/lib/common.sh
-d82652e90aaffb9f4bef7eee24735262678de3cf44b543e6d1e17561010a50a9  ./tests/test-static.sh
+fc52aae4e87b6579bf96fa0d6e0d3ff2d7e5feda96aa8e8fa4de58bf5c87eef8  ./tests/test-static.sh
