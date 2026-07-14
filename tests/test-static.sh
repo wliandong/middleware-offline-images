@@ -35,3 +35,89 @@ for file in .env.example versions.env scripts/lib/common.sh tests/test-static.sh
   grep -Fq "./$file" "$CHECKPOINT"
 done
 shasum -a 256 -c "$CHECKPOINT" >/dev/null
+
+COMPOSE_FILE="$ROOT/compose/docker-compose.yml"
+PROBE_SCRIPT="$ROOT/scripts/02-probe-images.sh"
+RENDER_SCRIPT="$ROOT/scripts/04-render-config.sh"
+
+for file in \
+  "$COMPOSE_FILE" \
+  "$PROBE_SCRIPT" \
+  "$RENDER_SCRIPT" \
+  "$ROOT/config/mysql/my.cnf" \
+  "$ROOT/config/redis/redis.conf.template" \
+  "$ROOT/config/mongodb/mongod.conf" \
+  "$ROOT/init/mysql/10-create-app-user.sh" \
+  "$ROOT/init/mongodb/10-create-app-user.js"; do
+  test -f "$file"
+done
+
+service_block() {
+  awk -v service="$1" '
+    $0 == "  " service ":" { capture = 1 }
+    capture && $0 ~ /^  [[:alnum:]_-]+:$/ && $0 != "  " service ":" { exit }
+    capture { print }
+  ' "$COMPOSE_FILE"
+}
+
+for service in mysql redis mongodb kafka; do
+  block="$(service_block "$service")"
+  test -n "$block"
+  grep -F 'platform: linux/amd64' <<<"$block"
+  grep -F 'restart: unless-stopped' <<<"$block"
+  grep -F 'healthcheck:' <<<"$block"
+  grep -F 'ulimits:' <<<"$block"
+  grep -F ':Z' <<<"$block"
+done
+
+grep -F 'mem_limit: 4g' <<<"$(service_block mysql)"
+grep -F 'mem_limit: 2g' <<<"$(service_block redis)"
+grep -F 'mem_limit: 4g' <<<"$(service_block mongodb)"
+grep -F 'mem_limit: 3g' <<<"$(service_block kafka)"
+
+for port in 3306 6379 27017 9092; do
+  grep -Fq "127.0.0.1:${port}:${port}" "$COMPOSE_FILE"
+done
+port_mapping_count="$(awk '/^[[:space:]]*-[[:space:]]+"127\.0\.0\.1:[0-9]+:[0-9]+"/ { count++ } END { print count + 0 }' "$COMPOSE_FILE")"
+test "$port_mapping_count" = "4"
+grep -F 'driver: bridge' "$COMPOSE_FILE"
+grep -F 'internal: true' "$COMPOSE_FILE"
+
+kafka_block="$(service_block kafka)"
+grep -F 'KAFKA_PROCESS_ROLES: broker,controller' <<<"$kafka_block"
+grep -F 'KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093' <<<"$kafka_block"
+grep -F 'KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_HOST://127.0.0.1:9092,PLAINTEXT://kafka:29092' <<<"$kafka_block"
+grep -F 'KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT' <<<"$kafka_block"
+grep -F 'bootstrap-server kafka:29092' <<<"$kafka_block"
+
+grep -F 'character-set-server = utf8mb4' "$ROOT/config/mysql/my.cnf"
+grep -F 'skip-name-resolve = ON' "$ROOT/config/mysql/my.cnf"
+grep -F 'innodb_buffer_pool_size = 2G' "$ROOT/config/mysql/my.cnf"
+grep -F 'log_bin = mysql-bin' "$ROOT/config/mysql/my.cnf"
+grep -F "default-time-zone = '+00:00'" "$ROOT/config/mysql/my.cnf"
+grep -F 'appendonly yes' "$ROOT/config/redis/redis.conf.template"
+grep -F 'maxmemory 1536mb' "$ROOT/config/redis/redis.conf.template"
+grep -F 'maxmemory-policy noeviction' "$ROOT/config/redis/redis.conf.template"
+grep -F '__REDIS_PASSWORD__' "$ROOT/config/redis/redis.conf.template"
+grep -F 'authorization: enabled' "$ROOT/config/mongodb/mongod.conf"
+grep -F 'cacheSizeGB: 2' "$ROOT/config/mongodb/mongod.conf"
+grep -F 'CREATE DATABASE IF NOT EXISTS' "$ROOT/init/mysql/10-create-app-user.sh"
+grep -F 'appdb' "$ROOT/init/mysql/10-create-app-user.sh"
+grep -F 'process.env.MONGODB_USER' "$ROOT/init/mongodb/10-create-app-user.js"
+grep -F 'appdb' "$ROOT/init/mongodb/10-create-app-user.js"
+
+grep -F 'docker manifest inspect --verbose' "$PROBE_SCRIPT"
+grep -F 'linux/amd64' "$PROBE_SCRIPT"
+grep -F 'image-manifests.txt' "$PROBE_SCRIPT"
+grep -F 'resolved-images.env' "$PROBE_SCRIPT"
+grep -F 'PRINT_REMOTE_SCRIPT' "$PROBE_SCRIPT"
+grep -F 'DRY_RUN' "$PROBE_SCRIPT"
+grep -F 'install -m 0600' "$RENDER_SCRIPT"
+grep -F 'docker compose' "$RENDER_SCRIPT"
+grep -F 'config --quiet' "$RENDER_SCRIPT"
+grep -F '.env' "$RENDER_SCRIPT"
+
+if rg -n 'latest' "$COMPOSE_FILE" "$PROBE_SCRIPT" "$RENDER_SCRIPT"; then
+  printf 'Task 3 files must not use a latest tag.\n' >&2
+  exit 1
+fi

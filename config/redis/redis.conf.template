@@ -1,0 +1,5 @@
+appendonly yes
+appendfsync everysec
+maxmemory 1536mb
+maxmemory-policy noeviction
+requirepass "__REDIS_PASSWORD__"

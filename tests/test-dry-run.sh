@@ -83,4 +83,30 @@ if grep -E '(^|[[:space:]])systemctl[[:space:]]+stop[[:space:]]+[^[:space:]]*(my
   exit 1
 fi
 
+probe_output="$(DRY_RUN=1 bash "$ROOT/scripts/02-probe-images.sh")"
+probe_payload="$(PRINT_REMOTE_SCRIPT=1 bash "$ROOT/scripts/02-probe-images.sh")"
+grep -F 'docker manifest inspect --verbose' <<<"$probe_payload"
+grep -F "MIRROR_PREFIXES='docker.1ms.run docker.m.daocloud.io dockerproxy.net'" <<<"$probe_payload"
+grep -F "MYSQL_IMAGE='library/mysql:8.4.10'" <<<"$probe_payload"
+grep -F 'reference="${prefix}/${image}"' <<<"$probe_payload"
+grep -F 'linux/amd64' <<<"$probe_payload"
+grep -F 'resolved-images.env' <<<"$probe_output"
+if grep -E '(^|[[:space:]])(ssh|scp)[[:space:]]' <<<"$probe_payload"; then
+  printf 'Probe payload-print mode must not run SSH or SCP.\n' >&2
+  exit 1
+fi
+
+render_fixture="$(mktemp -d "${TMPDIR:-/tmp}/middleware-render-test.XXXXXX")"
+trap 'rm -rf "$render_fixture"' EXIT
+printf '%s\n' 'REDIS_PASSWORD=dry-run-secret' >"$render_fixture/.env"
+printf '%s\n' 'MYSQL_IMAGE_REF=docker.1ms.run/library/mysql:8.4.10@sha256:example' >"$render_fixture/resolved-images.env"
+render_output="$(DRY_RUN=1 ENV_FILE="$render_fixture/.env" RESOLVED_IMAGES_FILE="$render_fixture/resolved-images.env" bash "$ROOT/scripts/04-render-config.sh")"
+grep -F 'mode 0600' <<<"$render_output"
+grep -F 'docker compose' <<<"$render_output"
+grep -F 'config --quiet' <<<"$render_output"
+if grep -F 'dry-run-secret' <<<"$render_output"; then
+  printf 'Render dry-run output must not print secrets.\n' >&2
+  exit 1
+fi
+
 printf 'Dry-run tests passed.\n'

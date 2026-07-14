@@ -1,0 +1,128 @@
+services:
+  mysql:
+    image: ${MYSQL_IMAGE_REF:?Run scripts/02-probe-images.sh first}
+    platform: linux/amd64
+    restart: unless-stopped
+    mem_limit: 4g
+    ports:
+      - "127.0.0.1:3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+      MYSQL_DATABASE: appdb
+      MYSQL_USER: ${MYSQL_USER:?Set MYSQL_USER in .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in .env}
+      TZ: UTC
+    volumes:
+      - /home/middleware-test/data/mysql:/var/lib/mysql:Z
+      - ../config/mysql/my.cnf:/etc/mysql/conf.d/my.cnf:ro,Z
+      - ../init/mysql:/docker-entrypoint-initdb.d:ro,Z
+    networks:
+      - middleware-internal
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  redis:
+    image: ${REDIS_IMAGE_REF:?Run scripts/02-probe-images.sh first}
+    platform: linux/amd64
+    restart: unless-stopped
+    mem_limit: 2g
+    ports:
+      - "127.0.0.1:6379:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - /home/middleware-test/data/redis:/data:Z
+      - ../runtime/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro,Z
+    networks:
+      - middleware-internal
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$${REDIS_PASSWORD}\" ping | grep -Fx PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  mongodb:
+    image: ${MONGODB_IMAGE_REF:?Run scripts/02-probe-images.sh first}
+    platform: linux/amd64
+    restart: unless-stopped
+    mem_limit: 4g
+    ports:
+      - "127.0.0.1:27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_ROOT_PASSWORD:?Set MONGODB_ROOT_PASSWORD in .env}
+      MONGODB_DATABASE: appdb
+      MONGODB_USER: ${MONGODB_USER:?Set MONGODB_USER in .env}
+      MONGODB_PASSWORD: ${MONGODB_PASSWORD:?Set MONGODB_PASSWORD in .env}
+    volumes:
+      - /home/middleware-test/data/mongodb:/data/db:Z
+      - ../config/mongodb/mongod.conf:/etc/mongod.conf:ro,Z
+      - ../init/mongodb:/docker-entrypoint-initdb.d:ro,Z
+    command: ["mongod", "--config", "/etc/mongod.conf"]
+    networks:
+      - middleware-internal
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --host 127.0.0.1 --username root --password \"$${MONGODB_ROOT_PASSWORD}\" --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 }).ok' | grep -Fx 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+
+  kafka:
+    image: ${KAFKA_IMAGE_REF:?Run scripts/02-probe-images.sh first}
+    platform: linux/amd64
+    restart: unless-stopped
+    mem_limit: 3g
+    ports:
+      - "127.0.0.1:9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT_HOST://0.0.0.0:9092,PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_HOST://127.0.0.1:9092,PLAINTEXT://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+    volumes:
+      - /home/middleware-test/data/kafka:/tmp/kraft-combined-logs:Z
+    networks:
+      - middleware-internal
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 18
+      start_period: 45s
+
+networks:
+  middleware-internal:
+    driver: bridge
+    internal: true
