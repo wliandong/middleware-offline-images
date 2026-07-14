@@ -52,6 +52,7 @@ assert_before 'if ! yum list available "docker-ce-${DOCKER_CE_VERSION}"' 'yum in
 assert_before 'yum install -y "docker-ce-${DOCKER_CE_VERSION}"' 'install -d -m 0755'
 assert_before 'install -d -m 0755' 'mktemp /etc/docker/daemon.json.XXXXXX'
 assert_before 'mktemp /etc/docker/daemon.json.XXXXXX' 'systemctl enable --now docker'
+assert_before 'install -m 0644 "${daemon_tmp}" /etc/docker/daemon.json' 'systemctl enable --now docker'
 assert_before 'systemctl enable --now docker' 'docker version --format'
 assert_before 'docker version --format' "docker info --format '{{.Driver}}'"
 assert_before "docker info --format '{{.Driver}}'" "docker info --format '{{.DockerRootDir}}'"

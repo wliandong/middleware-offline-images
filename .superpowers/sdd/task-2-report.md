@@ -73,3 +73,11 @@ git diff --check
 ```
 
 Key output: `Dry-run tests passed.` and all five files in `checkpoints/task-02.sha256` returned `OK`. The payload checks exercised both scripts without SSH/SCP; no target-host connection, Docker installation, or legacy service action occurred.
+
+## Follow-up Review Fix: Daemon Publish Order
+
+- Added an explicit payload-order assertion that `install -m 0644 "${daemon_tmp}" /etc/docker/daemon.json` occurs strictly before `systemctl enable --now docker`.
+- RED command: a temporary copy of the Task 2 scripts and test moved the publication command after `systemctl enable --now docker`, then ran `bash <temporary-root>/tests/test-dry-run.sh`.
+- RED result: the test exited non-zero and printed `RED confirmed: deliberately reordered daemon publication failed the order assertion.` No SSH/SCP, Docker installation, or Docker startup occurred.
+- GREEN commands: `bash -n scripts/00-preflight.sh scripts/01-install-docker.sh tests/test-dry-run.sh`, `bash tests/test-static.sh`, `bash tests/test-dry-run.sh`, and `shasum -a 256 -c checkpoints/task-02.sha256`.
+- GREEN result: all commands exited 0; the dry-run test printed `Dry-run tests passed.` and all five checkpoint entries returned `OK`.

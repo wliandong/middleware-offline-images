@@ -1,5 +1,5 @@
 fdcc4f09732eeb8b30aad131537d697e1ede08004b2bc692f0b7ce6f7f0c52b2  scripts/00-preflight.sh
 ae82b181a8f576cac9808155c7201c4dc88d5ebe321038a385409d193e50c137  scripts/01-install-docker.sh
 cc045f6aea4b62b1ed41bc329c751167ee47f2574d2b35de76460cd6a89fbcc5  scripts/lib/common.sh
-c8809b591db9358fd7a31d4d4fc1acd6e327df3af40101122a05dc8377aae3ee  tests/test-dry-run.sh
+3420af5b974413caeca8b5dd9b4cd7e46b37244e63ee2ddf8a50597a484767ea  tests/test-dry-run.sh
 23c39f800005ca2cd3c9c21714cbf0a6a0003d8f7e7ffb534db19a1cb06026a2  tests/test-static.sh
