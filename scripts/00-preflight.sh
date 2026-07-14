@@ -29,8 +29,10 @@ check_hard sh -c "lscpu | grep -Eiq '(^|[[:space:]])avx([[:space:]]|$)'"
 check_hard sh -c "xfs_info /home | grep -Eq 'ftype=1'"
 check_hard sh -c "test \"$(df -Pk /home | awk 'NR == 2 { print $4 }')\" -ge 12582912"
 
-if timedatectl show -p NTPSynchronized --value 2>/dev/null | grep -qx yes; then
-  printf 'PASS: NTP synchronized\n'
+if command -v chronyc >/dev/null 2>&1 && chronyc tracking 2>/dev/null | grep -Eq 'Leap status.*Normal'; then
+  printf 'PASS: NTP synchronized (chronyc)\n'
+elif timedatectl status 2>/dev/null | grep -Eiq 'NTP synchronized:[[:space:]]*yes'; then
+  printf 'PASS: NTP synchronized (timedatectl)\n'
 else
   printf 'FAIL: NTP synchronized\n' >&2
   fail=1

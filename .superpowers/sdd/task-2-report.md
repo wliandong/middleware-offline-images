@@ -81,3 +81,19 @@ Key output: `Dry-run tests passed.` and all five files in `checkpoints/task-02.s
 - RED result: the test exited non-zero and printed `RED confirmed: deliberately reordered daemon publication failed the order assertion.` No SSH/SCP, Docker installation, or Docker startup occurred.
 - GREEN commands: `bash -n scripts/00-preflight.sh scripts/01-install-docker.sh tests/test-dry-run.sh`, `bash tests/test-static.sh`, `bash tests/test-dry-run.sh`, and `shasum -a 256 -c checkpoints/task-02.sha256`.
 - GREEN result: all commands exited 0; the dry-run test printed `Dry-run tests passed.` and all five checkpoint entries returned `OK`.
+
+## RHEL 7.9 NTP Compatibility Fix
+
+### Real Failure Evidence and Root Cause
+
+- On the target RHEL 7.9 host, both `timedatectl show -p NTPSynchronized --value` and `timedatectl show -p NTPSynchronized` exited 1 with `timedatectl: invalid option -- 'p'`.
+- The same host returned 0 from `chronyc tracking` and reported `Leap status : Normal`.
+- Root cause: the preflight payload used a `timedatectl show -p` option form unsupported by this RHEL 7 implementation; the NTP service was synchronized and not the failing component.
+
+### RED and GREEN
+
+- RED command: `bash -n tests/test-dry-run.sh && bash tests/test-dry-run.sh`.
+- RED result: exit 1 after printing the legacy payload line `if timedatectl show -p NTPSynchronized --value ...`; the new test reported `Preflight payload must not use unsupported timedatectl show -p.`
+- Fix: the read-only payload now accepts `chronyc tracking` only when `Leap status.*Normal` matches, then falls back to `timedatectl status` matching `NTP synchronized: yes`; only both failures mark NTP as failed.
+- GREEN commands: `bash -n scripts/00-preflight.sh scripts/01-install-docker.sh tests/test-dry-run.sh`, `bash tests/test-static.sh`, `bash tests/test-dry-run.sh`, and `shasum -a 256 -c checkpoints/task-02.sha256`.
+- GREEN result: all commands exited 0; `Dry-run tests passed.` and all five checkpoint entries returned `OK`. The tests used only local payload-print and dry-run paths, without Docker, SSH, or service actions.

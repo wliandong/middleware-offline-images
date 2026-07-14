@@ -34,6 +34,19 @@ grep -F '/etc/docker/daemon.json' <<<"$install_output"
 
 grep -F 'lscpu' <<<"$preflight_payload"
 grep -F 'xfs_info /home' <<<"$preflight_payload"
+if grep -F 'timedatectl show -p' <<<"$preflight_payload"; then
+  printf 'Preflight payload must not use unsupported timedatectl show -p.\n' >&2
+  exit 1
+fi
+grep -F 'chronyc tracking' <<<"$preflight_payload"
+grep -F 'Leap status.*Normal' <<<"$preflight_payload"
+grep -F 'timedatectl status' <<<"$preflight_payload"
+grep -F 'NTP synchronized:' <<<"$preflight_payload"
+chrony_line="$(line_number 'chronyc tracking' "$preflight_payload")"
+timedatectl_line="$(line_number 'timedatectl status' "$preflight_payload")"
+test -n "$chrony_line"
+test -n "$timedatectl_line"
+test "$chrony_line" -lt "$timedatectl_line"
 grep -F 'yum install -y yum-utils device-mapper-persistent-data lvm2' <<<"$install_payload"
 grep -F 'if [[ -s /etc/docker/daemon.json ]]; then' <<<"$install_payload"
 grep -F 'Refusing to overwrite non-empty /etc/docker/daemon.json.' <<<"$install_payload"
