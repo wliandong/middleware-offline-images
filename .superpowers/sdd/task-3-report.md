@@ -98,3 +98,37 @@ git diff --check
 ```
 
 No real Docker command, network request, SSH/SCP operation, image pull, or virtual-machine action was performed.
+
+## Final Review Closure
+
+This section supersedes the timeout override behavior described in the previous increment.
+
+### RED
+
+- `bash tests/test-static.sh` exited 1 because `versions.env` did not contain the fixed line `export MANIFEST_TIMEOUT_SECONDS=20`; `.env.example` also lacked `MYSQL_USER`, `MONGODB_USER`, and `REDIS_PASSWORD`.
+- `TEST_CASE=timeout bash tests/test-task-3-behavior.sh` exited 1 after resolving the second mirror because the payload did not include `--signal=TERM --kill-after=2s 20s`.
+- `TEST_CASE=ready bash tests/test-task-3-behavior.sh` exited 1 because the generated payload switched `current` before setting `published=1`. Diagnostic line order was current switch at 87 and release protection at 88.
+
+### GREEN
+
+- `MANIFEST_TIMEOUT_SECONDS` is now fixed at 20 and cannot be overridden by the environment. Every inspect uses `timeout --signal=TERM --kill-after=2s 20s docker manifest inspect --verbose ...`.
+- The timeout stub records the complete hard-timeout arguments. The first prefix's MySQL reference is asserted to occur exactly once before failover to the second prefix.
+- `published=1` is set before the atomic `current` symlink switch. An interruption near the switch may leave an unreferenced release, but cleanup cannot remove a release referenced by `current`.
+- `.env.example` now contains empty placeholders for `MYSQL_ROOT_PASSWORD`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MONGODB_ROOT_PASSWORD`, `MONGODB_USER`, `MONGODB_PASSWORD`, and `REDIS_PASSWORD`; no real value was added.
+
+### Verification
+
+All commands below completed with exit code 0:
+
+```bash
+find scripts init tests -type f -name '*.sh' -print0 | sort -z | xargs -0 bash -n
+bash tests/test-static.sh
+bash tests/test-dry-run.sh
+bash tests/test-task-3-behavior.sh
+shasum -a 256 -c checkpoints/task-01.sha256
+shasum -a 256 -c checkpoints/task-02.sha256
+shasum -a 256 -c checkpoints/task-03.sha256
+git diff --check
+```
+
+No Docker engine command, network request, SSH/SCP operation, image pull, or virtual-machine action was performed.

@@ -73,7 +73,7 @@ for prefix in $MIRROR_PREFIXES; do
     image="${!image_var}"
     reference="${prefix}/${image}"
     manifest_status=0
-    manifest="$(timeout "${MANIFEST_TIMEOUT_SECONDS}s" docker manifest inspect --verbose "$reference" 2>&1)" || manifest_status=$?
+    manifest="$(timeout --signal=TERM --kill-after=2s 20s docker manifest inspect --verbose "$reference" 2>&1)" || manifest_status=$?
     if (( manifest_status != 0 )); then
       if (( manifest_status == 124 )); then
         printf 'Mirror %s timed out after %s seconds inspecting %s.\n' "$prefix" "$MANIFEST_TIMEOUT_SECONDS" "$reference" >&2
@@ -108,8 +108,8 @@ for prefix in $MIRROR_PREFIXES; do
     current_tmp="$RESOLUTION_ROOT/.current.$$"
     rm -f "$current_tmp"
     ln -s "$(basename "$release_dir")" "$current_tmp"
-    mv -f "$current_tmp" "$CURRENT_LINK"
     published=1
+    mv -f "$current_tmp" "$CURRENT_LINK"
     trap - EXIT
     printf 'Resolved all images through mirror %s.\n' "$prefix"
     exit 0

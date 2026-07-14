@@ -24,12 +24,14 @@ test_manifest_timeout_failover() (
   cat >"$fake_bin/timeout" <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
-duration="$1"
-shift
-printf '%s\t%s\n' "$duration" "$*" >>"$TIMEOUT_CAPTURE"
+printf '%s\n' "$*" >>"$TIMEOUT_CAPTURE"
 case "$*" in
   *first.invalid*) exit 124 ;;
 esac
+while [[ "${1:-}" == --* ]]; do
+  shift
+done
+shift
 "$@"
 SCRIPT
   cat >"$fake_bin/docker" <<'SCRIPT'
@@ -57,8 +59,9 @@ SCRIPT
 
   grep -F 'Resolved all images through mirror second.invalid.' <<<"$output" || \
     fail 'Probe payload did not move to the second prefix after the first timeout.'
-  grep -F $'20s\tdocker manifest inspect --verbose first.invalid/library/mysql:8.4.10' "$temp_dir/timeout.log"
-  grep -F $'20s\tdocker manifest inspect --verbose second.invalid/library/mysql:8.4.10' "$temp_dir/timeout.log"
+  grep -F -- '--signal=TERM --kill-after=2s 20s docker manifest inspect --verbose first.invalid/library/mysql:8.4.10' "$temp_dir/timeout.log"
+  grep -F -- '--signal=TERM --kill-after=2s 20s docker manifest inspect --verbose second.invalid/library/mysql:8.4.10' "$temp_dir/timeout.log"
+  test "$(grep -Fc 'first.invalid/library/mysql:8.4.10' "$temp_dir/timeout.log")" = "1"
   grep -F 'manifest inspect --verbose second.invalid/apache/kafka:4.3.1' "$temp_dir/docker.log"
   if grep -F 'first.invalid/library/redis:8.8' "$temp_dir/timeout.log"; then
     fail 'Timed out prefix was retried instead of moving to the next prefix.'
@@ -133,7 +136,7 @@ prepare_resolution_fixture() {
 }
 
 test_ready_marker_required() (
-  local temp_dir output payload commit_line ready_line
+  local temp_dir output payload commit_line ready_line release_safe_line current_switch_line
   temp_dir="$(mktemp -d "${TMPDIR:-/tmp}/middleware-resolution.XXXXXX")"
   trap 'rm -rf "$temp_dir"' EXIT
   prepare_resolution_fixture "$temp_dir"
@@ -144,6 +147,11 @@ test_ready_marker_required() (
   test -n "$commit_line"
   test -n "$ready_line"
   test "$commit_line" -lt "$ready_line"
+  release_safe_line="$(grep -nF '    published=1' <<<"$payload" | cut -d: -f1)"
+  current_switch_line="$(grep -nF '    mv -f "$current_tmp" "$CURRENT_LINK"' <<<"$payload" | cut -d: -f1)"
+  test -n "$release_safe_line"
+  test -n "$current_switch_line"
+  test "$release_safe_line" -lt "$current_switch_line"
 
   if DRY_RUN=1 ENV_FILE="$temp_dir/.env" RESOLVED_IMAGES_FILE="$temp_dir/resolved-images.env" RESOLUTION_DIR="$temp_dir/resolution" \
     bash "$ROOT/scripts/04-render-config.sh"; then

@@ -15,6 +15,7 @@ test "$KAFKA_UID" = "1000"
 test "$KAFKA_GID" = "1000"
 test "$KAFKA_DATA_DIR" = "/home/middleware-test/data/kafka"
 test "$MANIFEST_TIMEOUT_SECONDS" = "20"
+grep -Fx 'export MANIFEST_TIMEOUT_SECONDS=20' "$ROOT/versions.env"
 test "$IMAGE_PLATFORM" = "linux/amd64"
 test "$MYSQL_IMAGE" = "library/mysql:8.4.10"
 test "$REDIS_IMAGE" = "library/redis:8.8"
@@ -30,6 +31,10 @@ test "$REDIS_PORT" = "127.0.0.1:6379"
 test "$MONGODB_PORT" = "127.0.0.1:27017"
 test "$KAFKA_PORT" = "127.0.0.1:9092"
 declare -F run require_command sha256_file remote >/dev/null
+
+for variable in MYSQL_ROOT_PASSWORD MYSQL_USER MYSQL_PASSWORD MONGODB_ROOT_PASSWORD MONGODB_USER MONGODB_PASSWORD REDIS_PASSWORD; do
+  grep -Fx "${variable}=" "$ROOT/.env.example"
+done
 
 CHECKPOINT="$ROOT/checkpoints/task-01.sha256"
 if grep -Fq 'checkpoints/task-01.sha256' "$CHECKPOINT"; then
