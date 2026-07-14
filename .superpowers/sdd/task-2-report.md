@@ -1,0 +1,45 @@
+# Task 2 Report: Preflight and Docker Installation
+
+## Implementation
+
+- Added `scripts/00-preflight.sh`. It runs a read-only remote preflight for RHEL 7.9, x86_64, AVX, XFS `ftype=1`, 12 GB free space under `/home`, NTP synchronization, SELinux mode, listening ports, and legacy service units. Hard requirement failures exit before any changes. Normal runs save the timestamped output to `reports/preflight-local.txt`.
+- Added `scripts/01-install-docker.sh`. It uploads an installation payload to `/tmp/middleware-install-docker.sh`, adds the Aliyun Docker CE mirror, refuses to proceed when Docker CE 26.1.4 is unavailable, installs the exact Docker packages, configures `/home/docker-data` and `/etc/docker/daemon.json`, enables Docker, and verifies server version, storage driver, root directory, and Compose.
+- Added `tests/test-dry-run.sh`. It exercises both scripts with `DRY_RUN=1`, verifies the required Docker configuration output, and rejects legacy service stop commands.
+- In dry-run mode both scripts only print planned operations; they do not invoke SSH, SCP, remote scripts, Docker, or service actions.
+
+## RED
+
+Command: `bash tests/test-dry-run.sh`
+
+Key output: `bash: .../scripts/00-preflight.sh: No such file or directory`
+
+Exit status: 127, as expected before the Task 2 scripts existed.
+
+## GREEN and Verification
+
+Commands:
+
+```bash
+bash -n scripts/00-preflight.sh scripts/01-install-docker.sh tests/test-dry-run.sh
+bash tests/test-static.sh
+bash tests/test-dry-run.sh
+git diff --check
+find scripts tests -type f -print0 | sort -z | xargs -0 shasum -a 256 > checkpoints/task-02.sha256
+shasum -a 256 -c checkpoints/task-02.sha256
+```
+
+Results: all commands exited 0. The dry-run output included `26.1.4`, `/home/docker-data`, the Aliyun repository URL, and `/etc/docker/daemon.json`; no legacy service-stop command appeared. The SHA256 checkpoint verified all five scripts/tests as `OK`.
+
+## Files
+
+- `scripts/00-preflight.sh`
+- `scripts/01-install-docker.sh`
+- `tests/test-dry-run.sh`
+- `checkpoints/task-02.sha256`
+- `.superpowers/sdd/task-2-report.md`
+
+## Self-check and Follow-up
+
+- No real SSH, Docker installation, or legacy-service action was performed.
+- The exact package availability guard depends on the remote Aliyun repository exposing `docker-ce-26.1.4`; an unavailable RPM fails safely without selecting another version.
+- Preflight is intentionally read-only and must be run against the target host before installation.
